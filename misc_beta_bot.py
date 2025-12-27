@@ -181,20 +181,19 @@ async def cmd_code(message: types.Message):
 <code>https://github.com/S1S13AF7/misc_beta_bot</code> – код бота @misc_beta_bot
 <code>https://github.com/S1S13AF7/ub4tg</code> – юб. 
 <code>https://code.criminallycute.fi/bioeb_org/ub4tg</code> – fork
-<code>https://code.criminallycute.fi/S1S13AF7/victims</code>
 	'''
 	await message.answer(text,parse_mode=types.ParseMode.HTML)
 
 @dp.message_handler(commands=['termux','термукс'])
 async def cmd_termux(message: types.Message):
 	text='''
-<a href="https://f-droid.org/repo/com.termux_1020.apk">Termux_1020</a> / <a 
-	href="https://f-droid.org/repo/com.termux.api_51.apk">Termux API</a>
+<a href="https://f-droid.org/packages/com.termux/">Termux</a> / <a 
+	href="https://f-droid.org/packages/com.termux.api/">Termux API</a>
 
 <code>pkg install openssl python3 git termux-api</code>
 
-далі клонуємо із /code
-<code>git clone </code>Адреса
+далі клонуємо 
+<code>git clone https://github.com/S1S13AF7/ub4tg</code>
 
 <code>cd ub4tg && pip3 install -r requirements.txt</code>
 
@@ -212,37 +211,6 @@ async def cmd_startrek(message: types.Message):
 <code>https://thestartrekchronologyproject.blogspot.com/2009/09/and-now-conclusion.html</code>
 
 	'''
-	await message.answer(text,parse_mode=types.ParseMode.HTML)
-
-@dp.message_handler(commands=['victims','дн'])
-async def cmd_victims(message: types.Message):
-	text='‼️ для бота @bio_attacker_bot\n\n'
-	file='victims.txt' # ім'я файлу з айді
-	if not os.path.exists(file):
-		pass
-	else:
-		with open(file,"r",encoding="utf-8") as f:
-			ids=[]
-			ii = 0
-			li = f.readlines()
-			for line in li:
-				if line == '':
-					continue
-				r= re.findall(r'([0-9]{6,10})',line)
-				if r:
-					id=int(r[0])
-					if id not in ids:
-						ii+=1 # 1,2,3,4,5,6,7,
-						ids.append(id)	#	додаємо у масив
-						code=f'<code>@{id}</code>';	#	копіпабельно
-						href=f'<a href="tg://openmessage?user_id={id}">{code}</a>'
-						if not code in line and not href in line:
-							line=re.sub(f'@{id}',href,line)
-						text=f'{text}{ii}.	{line}'#append
-			if len(ids)>0:
-				text=f'{text}\nℹ️		інфа може бути застаріла.'
-						
-	#text=f'{text}\n💬	@misc_games' # замінив на наш ігровий
 	await message.answer(text,parse_mode=types.ParseMode.HTML)
 
 @dp.message_handler(commands=['chats','чати','чаты','чаті'])
