@@ -1,6 +1,6 @@
 # requirements.txt
 
-aiogram==2.19
+aiogram==2.25.2
 #Telethon-Mod
 #aiosqlite
 asyncio
