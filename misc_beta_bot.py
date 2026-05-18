@@ -169,7 +169,7 @@ async def process_help_command(message: types.Message):
 
 @dp.message_handler(commands=['ping'])
 async def process_ping_command(message: types.Message):
-	await message.reply("PONG!")
+	await message.reply("𝐏𝐎𝐍𝐆!")
 
 @dp.message_handler(commands=['dice','кубик'])
 async def cmd_dice(message: types.Message):
@@ -180,7 +180,6 @@ async def cmd_code(message: types.Message):
 	text='''
 <code>https://github.com/S1S13AF7/misc_beta_bot</code> – код бота @misc_beta_bot
 <code>https://github.com/S1S13AF7/ub4tg</code> – юб. 
-<code>https://code.criminallycute.fi/bioeb_org/ub4tg</code> – fork
 	'''
 	await message.answer(text,parse_mode=types.ParseMode.HTML)
 
@@ -217,7 +216,7 @@ async def cmd_startrek(message: types.Message):
 async def cmd_chats(message: types.Message):
 	await message.answer('''
 •	☕ @misc_chat
-•	🦠 @misc_games
+•	🐸 @misc_games
 •	🗃 @misc_files_v2
 ''')
 
