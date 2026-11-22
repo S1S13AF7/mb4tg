@@ -304,8 +304,8 @@ async def on_startup(dispatcher: Dispatcher):
 	me = await bot.get_me()
 	bot_id = int(me.id)
 	bot_name = str(me.first_name or '')
-	title_str = f'@{me.username} [{bot_id}]'
-	print(f'🤖 Bot started: {title_str}')
+	#title_str = f'@{me.username} [{bot_id}]'
+	print(f'🤖 Bot started: {bot_id}')
 	if os.name == 'nt':
 		try:
 			import ctypes
@@ -453,25 +453,29 @@ last_bind_caller = {}
 	)),
 	content_types=types.ContentTypes.TEXT
 )
+
 async def track_bind_caller(message: types.Message):
+	uid = int(message.from_user.id)
+	if message.from_user.is_bot or uid in (136817688, 1087968824):
+		me = await bot.get_me()
+		uid = int(me.id)
 	last_bind_caller[int(message.chat.id)] = {
-		'user_id': int(message.from_user.id),
+		'user_id': uid,
 		'lang': str(message.from_user.language_code or '').strip().lower(),
 		'ts': time.time()
 	}
 
-
-@dp.message_handler(
+dp.message_handler(
 	lambda m: m.chat.type != 'private'
 	and m.from_user
-	and int(m.from_user.id) in IRISES
-	and bool(re.search(
-		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
-		m.text or m.caption or '',
+	and bool(re.match(
+		r'^(?:[\./!]{1,2})?код\s+(?:беседы|чата|чату)$',
+		(m.text or '').strip(),
 		re.IGNORECASE
 	)),
 	content_types=types.ContentTypes.TEXT
 )
+
 async def iris_bind_chat_bot(message: types.Message):
 	raw_txt = message.text or message.caption or ''
 	code_m = re.search(
