@@ -176,7 +176,7 @@ def load_uapi_conf(filepath: str = uapi_file) -> dict:
 		need_save = True
 	
 	secret = str(data.get("secret", ""))
-	if not re.match(r"^[a-zA-Z0-9]{8,30}$", secret):
+	if not is_valid_secret(secret):
 		data["secret"] = gen_secret(10)
 		need_save = True
 	
