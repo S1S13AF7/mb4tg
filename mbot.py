@@ -293,7 +293,7 @@ async def on_startup(dispatcher: Dispatcher):
 	if os.name == 'nt':
 		try:
 			import ctypes
-			ctypes.windll.kernel32.SetConsoleTitleW(title_str)
+			ctypes.windll.kernel32.SetConsoleTitleW(str(bot_id))
 		except Exception:
 			pass
 	elif os.name == 'posix':
