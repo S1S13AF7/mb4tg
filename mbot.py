@@ -177,7 +177,7 @@ def load_uapi_conf(filepath: str = uapi_file) -> dict:
 	
 	secret = str(data.get("secret", ""))
 	if not re.match(r"^[a-zA-Z0-9]{8,30}$", secret):
-		data["secret"] = gen_uapi_secret()
+		data["secret"] = gen_secret(10)
 		need_save = True
 	
 	if need_save:
@@ -211,7 +211,7 @@ def sync_tg_user(
 		return {}
 	try:
 		con.ping(reconnect=True)
-		sec_val = gen_uapi_secret(10, 10) if with_secret else ''
+		sec_val = gen_secret(10) if with_secret else ''
 		tr_val = '1'
 		
 		d.execute(
@@ -231,7 +231,7 @@ def sync_tg_user(
 					`trusted`
 				),
 				`secret` = IF(
-					VALUES(`secret`) != '' AND CHAR_LENGTH(`secret`) < 8,
+					VALUES(`secret`) != '' AND `secret` NOT REGEXP '^[a-zA-Z][a-zA-Z0-9]{7,}$',
 					VALUES(`secret`),
 					`secret`
 				);''',
