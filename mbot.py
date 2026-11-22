@@ -9,6 +9,7 @@ import random
 import re
 import socket
 import sqlite3
+import secrets
 import string
 import subprocess
 import sys
@@ -144,10 +145,16 @@ save_config()
 ################################################################################
 
 
-def gen_uapi_secret(min_len: int = 10, max_len: int = 15) -> str:
-	chars = string.ascii_letters + string.digits
-	length = random.randint(min_len, max_len)
-	return ''.join(random.choice(chars) for _ in range(length))
+def gen_secret(length: int = 10) -> str:
+	first = secrets.choice(string.ascii_letters)
+	rest = ''.join(
+		secrets.choice(string.ascii_letters + string.digits)
+		for _ in range(max(7, length - 1))
+	)
+	return first + rest
+
+def is_valid_secret(val: str) -> bool:
+	return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9]{7,}$', str(val or '').strip()))
 
 
 def load_uapi_conf(filepath: str = uapi_file) -> dict:
