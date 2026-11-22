@@ -439,24 +439,26 @@ async def cmd_user_entry(message: types.Message):
 	
 	await message.answer(snd_msg)
 
+last_bind_caller = {}
+
+
 @dp.message_handler(
 	lambda m: m.chat.type != 'private'
 	and m.from_user
-	and int(m.from_user.id) in IRISES
-	and bool(re.search(
-		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
-		m.text or m.caption or '',
+	and not m.from_user.is_bot
+	and bool(re.match(
+		r'^(?:[\./!]{1,2})?код\s+(?:беседы|чата|чату)$',
+		(m.text or '').strip(),
 		re.IGNORECASE
 	)),
 	content_types=types.ContentTypes.TEXT
 )
-async def iris_bind_chat_bot(message: types.Message):
-	raw_txt = message.text or message.caption or ''
-	code_m = re.search(
-		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
-		raw_txt,
-		re.IGNORECASE
-	)
+async def track_bind_caller(message: types.Message):
+	last_bind_caller[int(message.chat.id)] = {
+		'user_id': int(message.from_user.id),
+		'lang': str(message.from_user.language_code or '').strip().lower(),
+		'ts': time.time()
+	}
 	if not code_m or not db_pymysql or not con or not d:
 		return
 	
