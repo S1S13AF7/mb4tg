@@ -40,8 +40,13 @@ def save_config():
 		'u_api_url': str(config.get('u_api_url') or u_api_url).strip(),
 		'db_sqlite3': bool(config.get('db_sqlite3', False)),
 		'db_pymysql': bool(config.get('db_pymysql', True)),
-		config.get('mysql') if isinstance(config.get('mysql'), dict) else mysqlD
+		'mysql': (
+			config.get('mysql')
+			if isinstance(config.get('mysql'), dict)
+			else mysqlD
+		)
 	}
+	
 	for k, v in config.items():
 		if k not in ordered_config:
 			ordered_config[k] = v
@@ -254,6 +259,8 @@ async def on_startup(dispatcher: Dispatcher):
 					print(f'🔑 Секрет оновлено з MySQL у {uapi_file}')
 		except Exception as e:
 			print(f'⚠️ Помилка самореєстрації бота в MySQL: {e}')
+	
+	asyncio.create_task(auto_pull())
 
 ################################################################################
 
