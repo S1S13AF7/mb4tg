@@ -554,7 +554,7 @@ async def cb_signal_call(payload: dict) -> tuple:
 		return None, 0.0, 'no uapi config'
 	
 	me = await bot.get_me()
-		body = {
+	body = {
 		'user_id': int(me.id),
 		'secret': str(my_secret),
 		'method': 'signal',
