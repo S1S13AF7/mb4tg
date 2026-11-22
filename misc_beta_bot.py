@@ -523,7 +523,5 @@ async def auto_pull():
 		
 		await asyncio.sleep(random.uniform(1800, 2700))
 
-asyncio.create_task(auto_pull())
-
 if __name__ == '__main__':
 	executor.start_polling(dp, on_startup=on_startup)
