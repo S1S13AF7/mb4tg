@@ -29,8 +29,8 @@ def save_config():
 	ordered_config = {
 		'token': str(config.get('token', 'YOUR_BOT_TOKEN')),
 		'u_api_url': str(config.get('u_api_url') or u_api_url).strip(),
-		'db_sqlite3': bool(config.get('db_sqlite3', True)),
-		'db_pymysql': bool(config.get('db_pymysql', False)),
+		'db_sqlite3': bool(config.get('db_sqlite3', False)),
+		'db_pymysql': bool(config.get('db_pymysql', True)),
 		'mysql': config.get('mysql') if isinstance(config.get('mysql'), dict) else {
 			'host': 'localhost',
 			'user': 'root',
@@ -52,7 +52,9 @@ if os.path.exists("config.py"):
 				loaded = json.load(cf)
 				if isinstance(loaded, dict):
 					config.update(loaded)
-		old_tok = str(getattr(old_cfg, "TOKEN", "") or getattr(old_cfg, "token", "")).strip()
+		old_tok = str(
+			getattr(old_cfg, "TOKEN", "") or getattr(old_cfg, "token", "")
+		).strip()
 		if old_tok and old_tok != "YOUR_BOT_TOKEN":
 			config["token"] = old_tok
 		save_config()
@@ -70,8 +72,8 @@ if not os.path.exists(CONFIG_PATH):
 		json.dump({
 			"token": "YOUR_BOT_TOKEN",
 			"u_api_url": u_api_url,
-			"db_sqlite3": True,
-			"db_pymysql": False,
+			"db_sqlite3": False,
+			"db_pymysql": True,
 			"mysql": {
 				"host": "localhost",
 				"user": "root",
@@ -92,8 +94,8 @@ if not TOKEN or TOKEN == 'YOUR_BOT_TOKEN':
 	sys.exit(1)
 
 u_api_url = str(config.get('u_api_url') or u_api_url).strip()
-db_sqlite3 = bool(config.get('db_sqlite3', True))
-db_pymysql = bool(config.get('db_pymysql', False))
+db_sqlite3 = bool(config.get('db_sqlite3', False))
+db_pymysql = bool(config.get('db_pymysql', True))
 mysql_conf = config.get('mysql') if isinstance(config.get('mysql'), dict) else {
 	'host': 'localhost',
 	'user': 'root',
@@ -172,13 +174,13 @@ if db_pymysql:
 	try:
 		import pymysql
 		import pymysql.cursors
-		ldb = pymysql.connect(
+		con = pymysql.connect(
 			host=str(mysql_conf.get('host', 'localhost')),
 			user=str(mysql_conf.get('user', 'root')),
 			password=str(mysql_conf.get('password', '')),
 			db=str(mysql_conf.get('db', 'db')),
 			charset='utf8mb4',
-			autocommit=True,
+			autocommit=False,
 			cursorclass=pymysql.cursors.DictCursor
 		)
 		dbc = ldb.cursor()
@@ -212,6 +214,20 @@ if db_pymysql:
 		config['db_pymysql'] = False
 		save_config()
 
+if db_pymysql:
+	d.execute('''CREATE TABLE IF NOT EXISTS `tg_bot_users` (
+		`user_id` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
+		`reg_int` int(11) UNSIGNED NOT NULL DEFAULT '0',
+		`f_name` text CHARACTER SET utf8mb4 NOT NULL DEFAULT '',
+		`lng_code` varchar(8) NOT NULL DEFAULT '',
+		`f_time` int(11) UNSIGNED NOT NULL DEFAULT '0',
+		`m_time` int(11) UNSIGNED NOT NULL DEFAULT '0',
+		`secret` varchar(50) NOT NULL DEFAULT '',
+		`trusted` enum('0','1') NOT NULL DEFAULT '0',
+		PRIMARY KEY (`user_id`)
+	);''')
+	con.commit()
+
 ########################################################################
 
 bot = Bot(token=TOKEN, parse_mode=types.ParseMode.HTML)
@@ -225,10 +241,10 @@ async def on_startup(dispatcher: Dispatcher):
 	bot_name = str(me.first_name or '')
 	print(f'Bot started: @{me.username} ({bot_id})')
 	
-	if db_pymysql and ldb and dbc:
+	if db_pymysql and con and d:
 		try:
-			ldb.ping(reconnect=True)
-			dbc.execute(
+			con.ping(reconnect=True)
+			d.execute(
 				'''INSERT INTO `tg_bot_users`
 				(`user_id`, `reg_int`, `f_name`, `secret`, `trusted`)
 				VALUES (%s, %s, %s, %s, '1')
@@ -242,11 +258,12 @@ async def on_startup(dispatcher: Dispatcher):
 					);''',
 				(bot_id, int(time.time()), bot_name, my_secret)
 			)
-			dbc.execute(
+			con.commit()
+			d.execute(
 				"SELECT `secret` FROM `tg_bot_users` WHERE `user_id` = %s",
 				(bot_id,)
 			)
-			row_sec = dbc.fetchone()
+			row_sec = d.fetchone()
 			if row_sec:
 				db_sec = str(row_sec.get('secret', ''))
 				if (
@@ -269,32 +286,11 @@ async def reg_user(message: types.Message) -> int:
 	lng_code = message.from_user.language_code or ''
 	when_int = int(datetime.timestamp(message.date))
 	reg_date = when_int
-	sqlite_rd = when_int
-	pymysql_rd = when_int
 	
-	if db_sqlite3:
+	if db_pymysql and con and d:
 		try:
-			cur.execute(
-				"INSERT OR IGNORE INTO users "
-				"(user_id, reg_int, f_name, lng_code) VALUES (?, ?, ?, ?)",
-				(user_id, when_int, user_fn, lng_code)
-			)
-			con.commit()
-			cur.execute(
-				"SELECT reg_int FROM users WHERE user_id = ?",
-				(user_id,)
-			)
-			rd = cur.fetchone()
-			if rd and int(rd[0]) > 0:
-				sqlite_rd = int(rd[0])
-				reg_date = sqlite_rd
-		except Exception as Err:
-			print(f"sqlite reg_user err: {Err}")
-	
-	if db_pymysql and ldb and dbc:
-		try:
-			ldb.ping(reconnect=True)
-			dbc.execute(
+			con.ping(reconnect=True)
+			d.execute(
 				"INSERT INTO `tg_bot_users` "
 				"(`user_id`, `reg_int`, `f_name`, `lng_code`) "
 				"VALUES (%s, %s, %s, %s) "
@@ -302,41 +298,38 @@ async def reg_user(message: types.Message) -> int:
 				"`f_name` = VALUES(`f_name`), `lng_code` = VALUES(`lng_code`);",
 				(user_id, when_int, user_fn, lng_code)
 			)
-			dbc.execute(
+			con.commit()
+			d.execute(
 				"SELECT `reg_int` FROM `tg_bot_users` WHERE `user_id` = %s",
 				(user_id,)
 			)
-			rd = dbc.fetchone()
+			rd = d.fetchone()
 			if rd and int(rd['reg_int']) > 0:
-				pymysql_rd = int(rd['reg_int'])
-				reg_date = pymysql_rd
+				reg_date = int(rd['reg_int'])
 		except Exception as Err:
 			print(f"localhost reg_user err: {Err}")
-	
-	if db_sqlite3 and db_pymysql and ldb and dbc:
-		reg_date = int(min(sqlite_rd, pymysql_rd))
-		if sqlite_rd < pymysql_rd:
-			try:
-				dbc.execute(
-					"UPDATE `tg_bot_users` SET `reg_int` = %s WHERE `user_id` = %s",
-					(reg_date, user_id)
-				)
-			except Exception as Err:
-				print(f"localhost UPDATE err: {Err}")
-		elif sqlite_rd > pymysql_rd:
-			try:
-				cur.execute(
-					"UPDATE users SET reg_int = ? WHERE user_id = ?",
-					(reg_date, user_id)
-				)
-				con.commit()
-			except Exception as Err:
-				print(f"sqlite UPDATE err: {Err}")
 	
 	if reg_date == when_int:
 		print(REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn))
 	
 	return reg_date
+
+
+async def has_user_lang(user_id: int) -> bool:
+	if db_pymysql and con and d:
+		try:
+			con.ping(reconnect=True)
+			d.execute(
+				"SELECT `lng_code` FROM `tg_bot_users` "
+				"WHERE `user_id` = %s LIMIT 1",
+				(int(user_id),)
+			)
+			row = d.fetchone()
+			if row and str(row.get('lng_code') or '').strip():
+				return True
+		except Exception:
+			pass
+	return False
 
 
 async def get_cb_secret(
@@ -345,12 +338,12 @@ async def get_cb_secret(
 	user_fn: str,
 	lng_code: str
 ) -> str:
-	if not db_pymysql or not ldb or not dbc:
+	if not db_pymysql or not con and d:
 		return ''
 	try:
-		ldb.ping(reconnect=True)
+		con.ping(reconnect=True)
 		new_sec = gen_uapi_secret(10, 10)
-		dbc.execute(
+		d.execute(
 			'''INSERT INTO `tg_bot_users`
 			(`user_id`, `reg_int`, `f_name`, `lng_code`, `secret`, `trusted`)
 			VALUES (%s, %s, %s, %s, %s, '0')
@@ -364,11 +357,12 @@ async def get_cb_secret(
 				);''',
 			(int(user_id), int(when_int), str(user_fn), str(lng_code), new_sec)
 		)
-		dbc.execute(
+		con.commit()
+		d.execute(
 			"SELECT `secret` FROM `tg_bot_users` WHERE `user_id` = %s LIMIT 1",
 			(int(user_id),)
 		)
-		row = dbc.fetchone()
+		row = d.fetchone()
 		if row and row.get('secret'):
 			return str(row['secret'])
 	except Exception as Err:
@@ -383,18 +377,30 @@ async def cmd_user_entry(message: types.Message):
 	user_fn = message.from_user.first_name or ''
 	lng_code = message.from_user.language_code or ''
 	when_int = int(datetime.timestamp(message.date))
+	is_pm = (message.chat.type == types.ChatType.PRIVATE)
 	
 	if cmd in ('cb', 'cb4ub', 'cb4tg'):
-		if message.chat.type != types.ChatType.PRIVATE:
-			await message.reply("🔒 Команда доступна тільки в ЛС бота.")
-			return
 		if not db_pymysql:
 			await message.reply("⚠️ Серверна БД зараз недоступна.")
 			return
+		
+		if not is_pm and not await has_user_lang(user_id):
+			me_bot = await bot.get_me()
+			await message.reply(
+				f"🔒 Спершу напиши мені в <a href=\"https://t.me"
+				f"{me_bot.username}?start=cb\">ЛС</a> (<code>/start</code> "
+				f"або <code>/cb</code>), щоб я міг надіслати секрет."
+			)
+			return
+		
 		await reg_user(message)
 		sec = await get_cb_secret(user_id, when_int, user_fn, lng_code)
-		if sec:
-			await message.answer(
+		if not sec:
+			await message.reply("❌ Не вдалося отримати секрет.")
+			return
+		
+		sec_text = (
+
 				f"🔑 Твій API-секрет (<code>uapi.json</code>):\n"
 				f"<code>{sec}</code>"
 			)
@@ -445,7 +451,7 @@ async def cmd_termux(message: types.Message):
 <a href="https://f-droid.org/packages/com.termux/">Termux</a> / <a 
 	href="https://f-droid.org/packages/com.termux.api/">Termux API</a>
 
-<code>pkg install openssl python3 git termux-api</code>
+<code>pkg install openssl openssl-tool python3 git termux-api</code>
 
 далі клонуємо 
 <code>git clone https://github.com/S1S13AF7/ub4tg</code>
