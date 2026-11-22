@@ -44,6 +44,26 @@ def save_config():
 	with open(CONFIG_PATH, "w", encoding="utf-8") as wf:
 		json.dump(ordered_config, wf, ensure_ascii=False, indent='\t')
 
+if os.path.exists("config.py"):
+	try:
+		import config as old_cfg
+		if os.path.exists(CONFIG_PATH):
+			with open(CONFIG_PATH, "r", encoding="utf-8-sig") as cf:
+				loaded = json.load(cf)
+				if isinstance(loaded, dict):
+					config.update(loaded)
+		old_tok = str(getattr(old_cfg, "TOKEN", "") or getattr(old_cfg, "token", "")).strip()
+		if old_tok and old_tok != "YOUR_BOT_TOKEN":
+			config["token"] = old_tok
+		save_config()
+		try:
+			del sys.modules["config"]
+		except Exception:
+			pass
+		os.remove("config.py")
+		print(f'♻️ Токен перенесено зі старого config.py у {CONFIG_PATH}, файл видалено.')
+	except Exception as e:
+		print(f'⚠️ Не вдалося імпортувати config.py: {e}')
 
 if not os.path.exists(CONFIG_PATH):
 	with open(CONFIG_PATH, "w", encoding="utf-8") as wf:
@@ -240,34 +260,83 @@ async def on_startup(dispatcher: Dispatcher):
 		except Exception as e:
 			print(f'⚠️ Помилка самореєстрації бота в MySQL: {e}')
 
-	if db_sqlite3 and db_pymysql:
-		#якщо юзаємо обидві бази,то
-		reg_date=int(min(sqlite_rd,pymysql_rd))
-		
-		if sqlite_rd < pymysql_rd:
-			#UPDATE `tg_bot_users` SET `reg_int`=? WHERE `user_id`=?;
-			try:
-				dbc.execute(f"UPDATE `tg_bot_users` SET `reg_int` ='{reg_date}' WHERE user_id = %d" % int(user_id)); ldb.commit()#як я хотів воно нехотіло, тому буде пока так.
-			except Exception as Err:
-				print(f"localhost UPDATE:{Err}")
-		
-		if sqlite_rd > pymysql_rd:
-			try:
-				cur.execute("UPDATE users SET reg_int =? WHERE user_id=?", (int(reg_date),int(user_id))); con.commit()
-			except Exception as Err:
-				print(f"sqlite UPDATE:{Err}")
+########################################################################
+
+
+async def reg_user(message: types.Message) -> int:
+	user_id = int(message.from_user.id)
+	user_fn = message.from_user.first_name or ''
+	lng_code = message.from_user.language_code or ''
+	when_int = int(datetime.timestamp(message.date))
+	reg_date = when_int
+	sqlite_rd = when_int
+	pymysql_rd = when_int
 	
-	if reg_date==when_int:
+	if db_sqlite3:
+		try:
+			cur.execute(
+				"INSERT OR IGNORE INTO users "
+				"(user_id, reg_int, f_name, lng_code) VALUES (?, ?, ?, ?)",
+				(user_id, when_int, user_fn, lng_code)
+			)
+			con.commit()
+			cur.execute(
+				"SELECT reg_int FROM users WHERE user_id = ?",
+				(user_id,)
+			)
+			rd = cur.fetchone()
+			if rd and int(rd[0]) > 0:
+				sqlite_rd = int(rd[0])
+				reg_date = sqlite_rd
+		except Exception as Err:
+			print(f"sqlite reg_user err: {Err}")
+	
+	if db_pymysql and ldb and dbc:
+		try:
+			ldb.ping(reconnect=True)
+			dbc.execute(
+				"INSERT INTO `tg_bot_users` "
+				"(`user_id`, `reg_int`, `f_name`, `lng_code`) "
+				"VALUES (%s, %s, %s, %s) "
+				"ON DUPLICATE KEY UPDATE "
+				"`f_name` = VALUES(`f_name`), `lng_code` = VALUES(`lng_code`);",
+				(user_id, when_int, user_fn, lng_code)
+			)
+			dbc.execute(
+				"SELECT `reg_int` FROM `tg_bot_users` WHERE `user_id` = %s",
+				(user_id,)
+			)
+			rd = dbc.fetchone()
+			if rd and int(rd['reg_int']) > 0:
+				pymysql_rd = int(rd['reg_int'])
+				reg_date = pymysql_rd
+		except Exception as Err:
+			print(f"localhost reg_user err: {Err}")
+	
+	if db_sqlite3 and db_pymysql and ldb and dbc:
+		reg_date = int(min(sqlite_rd, pymysql_rd))
+		if sqlite_rd < pymysql_rd:
+			try:
+				dbc.execute(
+					"UPDATE `tg_bot_users` SET `reg_int` = %s WHERE `user_id` = %s",
+					(reg_date, user_id)
+				)
+			except Exception as Err:
+				print(f"localhost UPDATE err: {Err}")
+		elif sqlite_rd > pymysql_rd:
+			try:
+				cur.execute(
+					"UPDATE users SET reg_int = ? WHERE user_id = ?",
+					(reg_date, user_id)
+				)
+				con.commit()
+			except Exception as Err:
+				print(f"sqlite UPDATE err: {Err}")
+	
+	if reg_date == when_int:
 		print(REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn))
 	
 	return reg_date
-
-bot = Bot(token=TOKEN, parse_mode=types.ParseMode.HTML) #see: https://mastergroosha.github.io/aiogram-2-guide/messages/
-dp = Dispatcher(bot)   
-
-print('Bot started') 
-
-########################################################################
 
 
 async def get_cb_secret(
@@ -342,16 +411,7 @@ async def cmd_user_entry(message: types.Message):
 		snd_msg = "🖖"
 	
 	await message.answer(snd_msg)
-	
-	rd = int(await reg_user(message))
-	if rd == when_int:
-		snd_msg = REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn)
-	elif cmd == 'reg' and rd > 0:
-		snd_msg = time.strftime('%d.%m.%Y', time.localtime(rd))
-	else:
-		snd_msg = "🖖"
-	
-	await message.answer(snd_msg)
+
 
 
 @dp.message_handler(commands=['help'])
@@ -417,4 +477,4 @@ async def cmd_chats(message: types.Message):
 ''')
 
 if __name__ == '__main__':
-	executor.start_polling(dp)
+	executor.start_polling(dp, on_startup=on_startup)
