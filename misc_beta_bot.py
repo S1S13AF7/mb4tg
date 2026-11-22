@@ -29,17 +29,18 @@ config = {}
 
 
 def save_config():
+	mysqlD = {
+		'host': 'localhost',
+		'user': 'root',
+		'password': 'V3rY$tR0NgPaS$Sw0Rd',
+		'db': 'db'
+	}
 	ordered_config = {
 		'token': str(config.get('token', 'YOUR_BOT_TOKEN')),
 		'u_api_url': str(config.get('u_api_url') or u_api_url).strip(),
 		'db_sqlite3': bool(config.get('db_sqlite3', False)),
 		'db_pymysql': bool(config.get('db_pymysql', True)),
-		'mysql': config.get('mysql') if isinstance(config.get('mysql'), dict) else {
-			'host': 'localhost',
-			'user': 'root',
-			'password': 'V3rY$tR0NgPaS$Sw0Rd',
-			'db': 'db'
-		}
+		config.get('mysql') if isinstance(config.get('mysql'), dict) else mysqlD
 	}
 	for k, v in config.items():
 		if k not in ordered_config:
@@ -66,8 +67,10 @@ if os.path.exists("config.py"):
 		except Exception:
 			pass
 		os.remove("config.py")
-		print(f'♻️ Токен перенесено зі старого config.py у {CONFIG_PATH}, 
-		файл видалено.')
+		print(
+			f'♻️ Токен перенесено зі старого config.py у {CONFIG_PATH}, '
+			f'файл видалено.'
+		)
 	except Exception as e:
 		print(f'⚠️ Не вдалося імпортувати config.py: {e}')
 
@@ -395,7 +398,10 @@ async def cmd_user_entry(message: types.Message):
 	
 	rd = int(await reg_user(message))
 	if rd == when_int:
-		snd_msg = REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn)
+		
+		tpl = REG_OK.get(lng_code, REG_OK['default'])
+		snd_msg = tpl.format(user_fn=user_fn)
+	
 	elif cmd == 'reg' and rd > 0:
 		snd_msg = time.strftime('%d.%m.%Y', time.localtime(rd))
 	else:
@@ -510,7 +516,7 @@ async def auto_pull():
 		
 		await asyncio.sleep(random.uniform(1800, 2700))
 
-	asyncio.create_task(auto_pull())
+asyncio.create_task(auto_pull())
 
 if __name__ == '__main__':
 	executor.start_polling(dp, on_startup=on_startup)
