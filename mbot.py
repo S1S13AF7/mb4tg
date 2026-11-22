@@ -21,7 +21,7 @@ from aiogram.utils import executor
 from const import REG_OK
 
 ################################################################################
-
+sys_lang = ''
 try:
 	loc = (locale.getlocale()[0] or '').split('_')[0].lower()
 	if re.match(r'^[a-z]{2,3}$', loc):
@@ -283,7 +283,6 @@ if db_pymysql:
 bot = Bot(token=TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot)
 
-
 async def on_startup(dispatcher: Dispatcher):
 	global my_secret
 	me = await bot.get_me()
@@ -291,41 +290,16 @@ async def on_startup(dispatcher: Dispatcher):
 	bot_name = str(me.first_name or '')
 	print(f'Bot started: @{me.username} ({bot_id})')
 	
-	if db_pymysql and con and d:
-		try:
-			con.ping(reconnect=True)
-			d.execute(
-				'''INSERT INTO `tg_bot_users`
-				(`user_id`, `reg_int`, `f_name`, `secret`, `trusted`)
-				VALUES (%s, %s, %s, %s, '1')
-				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
-				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
-					`trusted` = '1',
-					`secret` = IF(
-						CHAR_LENGTH(`secret`) >= 8,
-						`secret`,
-						VALUES(`secret`)
-					);''',
-				(bot_id, int(time.time()), bot_name, my_secret)
-			)
-			con.commit()
-			d.execute(
-				"SELECT `secret` FROM `tg_bot_users` WHERE `user_id` = %s",
-				(bot_id,)
-			)
-			row_sec = d.fetchone()
-			if row_sec:
-				db_sec = str(row_sec.get('secret', ''))
-				if (
-					re.match(r"^[a-zA-Z0-9]{8,30}$", db_sec)
-					and db_sec != my_secret
-				):
-					my_secret = db_sec
-					uapi_conf['secret'] = db_sec
-					save_uapi_conf(uapi_conf)
-					print(f'🔑 Секрет оновлено з MySQL у {uapi_file}')
-		except Exception as e:
-			print(f'⚠️ Помилка самореєстрації бота в MySQL: {e}')
+	row = sync_tg_user(
+		bot_id, int(time.time()), bot_name, sys_lang,
+		with_secret=True, force_trusted=True
+	)
+	db_sec = str(row.get('secret', ''))
+	if re.match(r"^[a-zA-Z0-9]{8,30}$", db_sec) and db_sec != my_secret:
+		my_secret = db_sec
+		uapi_conf['secret'] = db_sec
+		save_uapi_conf(uapi_conf)
+		print(f'🔑 Секрет оновлено з MySQL у {uapi_file}')
 	
 	asyncio.create_task(auto_pull())
 
@@ -342,13 +316,6 @@ async def reg_user(message: types.Message) -> int:
 	row = sync_tg_user(user_id, when_int, user_fn, lng_code)
 	if row and int(row.get('reg_int') or 0) > 0:
 		reg_date = int(row['reg_int'])
-	
-	if reg_date == when_int:
-		print(REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn))
-	
-	return reg_date
-		except Exception as Err:
-			print(f"localhost reg_user err: {Err}")
 	
 	if reg_date == when_int:
 		print(REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn))
@@ -372,6 +339,7 @@ async def has_user_lang(user_id: int) -> bool:
 			pass
 	return False
 
+
 async def get_cb_secret(
 	user_id: int,
 	when_int: int,
@@ -383,9 +351,7 @@ async def get_cb_secret(
 		with_secret=True
 	)
 	return str(row.get('secret') or '')
-	except Exception as Err:
-		print(f"localhost get_cb_secret err: {Err}")
-	return ''
+
 
 @dp.message_handler(commands=['start', 'reg', 'cb', 'cb4ub', 'cb4tg'])
 async def cmd_user_entry(message: types.Message):
