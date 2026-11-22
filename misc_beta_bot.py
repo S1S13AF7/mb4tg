@@ -169,6 +169,8 @@ if db_sqlite3:
 
 ldb = None
 dbc = None
+con = None
+d = None
 
 if db_pymysql:
 	try:
@@ -183,30 +185,7 @@ if db_pymysql:
 			autocommit=False,
 			cursorclass=pymysql.cursors.DictCursor
 		)
-		dbc = ldb.cursor()
-		dbc.execute('''CREATE TABLE IF NOT EXISTS `tg_bot_users` (
-			`user_id` bigint(20) unsigned NOT NULL DEFAULT '0',
-			`reg_int` int(11) unsigned NOT NULL DEFAULT '0',
-			`f_name` text CHARACTER SET utf8mb4 NOT NULL,
-			`lng_code` varchar(8) NOT NULL DEFAULT '',
-			`f_time` int(11) unsigned NOT NULL DEFAULT '0',
-			`m_time` int(11) unsigned NOT NULL DEFAULT '0',
-			`secret` varchar(50) NOT NULL DEFAULT '',
-			`trusted` enum('0','1') NOT NULL DEFAULT '0',
-			PRIMARY KEY (`user_id`)
-		);''')
-		for alter_sql in (
-			"ALTER TABLE `tg_bot_users` "
-			"ADD COLUMN `lng_code` varchar(8) NOT NULL DEFAULT '';",
-			"ALTER TABLE `tg_bot_users` "
-			"ADD COLUMN `secret` varchar(50) NOT NULL DEFAULT '';",
-			"ALTER TABLE `tg_bot_users` "
-			"ADD COLUMN `trusted` enum('0','1') NOT NULL DEFAULT '0';"
-		):
-			try:
-				dbc.execute(alter_sql)
-			except Exception:
-				pass
+		d = con.cursor()
 		print('✅ Підключено до MySQL')
 	except Exception as e:
 		print(f'❌ MySQL недоступний ({e}) — скидаю у False')
@@ -338,7 +317,7 @@ async def get_cb_secret(
 	user_fn: str,
 	lng_code: str
 ) -> str:
-	if not db_pymysql or not con and d:
+	if not db_pymysql or not con or not d:
 		return ''
 	try:
 		con.ping(reconnect=True)
@@ -400,12 +379,22 @@ async def cmd_user_entry(message: types.Message):
 			return
 		
 		sec_text = (
-
-				f"🔑 Твій API-секрет (<code>uapi.json</code>):\n"
-				f"<code>{sec}</code>"
-			)
+			f"🔑 Твій API-секрет (<code>uapi.json</code>):\n"
+			f"<code>{sec}</code>"
+		)
+		if is_pm:
+			await message.answer(sec_text)
 		else:
-			await message.answer("❌ Не вдалося отримати секрет.")
+			try:
+				await bot.send_message(user_id, sec_text)
+				await message.reply("🔑 Надіслав секрет тобі в ЛС.")
+			except Exception:
+				me_bot = await bot.get_me()
+				await message.reply(
+					f"⚠️ Не можу написати тобі в ЛС. Відкрий "
+					f"<a href=\"https://t.me{me_bot.username}?start=cb\">"
+					f"діалог зі мною</a> і надішли туди <code>/cb</code>."
+				)
 		return
 	
 	rd = int(await reg_user(message))
@@ -417,8 +406,6 @@ async def cmd_user_entry(message: types.Message):
 		snd_msg = "🖖"
 	
 	await message.answer(snd_msg)
-
-
 
 @dp.message_handler(commands=['help'])
 async def process_help_command(message: types.Message):
@@ -441,6 +428,7 @@ async def cmd_dice(message: types.Message):
 async def cmd_code(message: types.Message):
 	text='''
 <code>https://github.com/S1S13AF7/misc_beta_bot</code> – код бота @misc_beta_bot
+<code>https://github.com/S1S13AF7/cb4tg</code> – CallBack для ботів у телеграмі
 <code>https://github.com/S1S13AF7/ub4tg</code> – юб. 
 	'''
 	await message.answer(text,parse_mode=types.ParseMode.HTML)
