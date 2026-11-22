@@ -366,7 +366,7 @@ async def cmd_user_entry(message: types.Message):
 		if not is_pm and not await has_user_lang(user_id):
 			me_bot = await bot.get_me()
 			await message.reply(
-				f"🔒 Спершу напиши мені в <a href=\"https://t.me"
+				f"🔒 Спершу напиши мені в <a href=\"https://t.me/"
 				f"{me_bot.username}?start=cb\">ЛС</a> (<code>/start</code> "
 				f"або <code>/cb</code>), щоб я міг надіслати секрет."
 			)
@@ -392,7 +392,7 @@ async def cmd_user_entry(message: types.Message):
 				me_bot = await bot.get_me()
 				await message.reply(
 					f"⚠️ Не можу написати тобі в ЛС. Відкрий "
-					f"<a href=\"https://t.me{me_bot.username}?start=cb\">"
+					f"<a href=\"https://t.me/{me_bot.username}?start=cb\">"
 					f"діалог зі мною</a> і надішли туди <code>/cb</code>."
 				)
 		return
