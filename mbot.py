@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import aiohttp
 import asyncio
 import hashlib
 import json
@@ -548,6 +548,93 @@ async def iris_bind_chat_bot(message: types.Message):
 			await message.answer(reply_txt)
 	except Exception as Err:
 		print(f'⚠️ [mbot bind] MySQL err: {Err}')
+
+async def cb_signal_call(payload: dict) -> tuple:
+	if not u_api_url or not my_secret:
+		return None, 0.0, 'no uapi config'
+	
+	me = await bot.get_me()
+	body = {
+		'id': int(me.id),
+		'secret': str(my_secret),
+		'method': 'signal',
+		'object': payload
+	}
+	t0 = time.perf_counter()
+	try:
+		timeout = aiohttp.ClientTimeout(total=10)
+		async with aiohttp.ClientSession(timeout=timeout) as session:
+			async with session.post(u_api_url, json=body) as resp:
+				raw = await resp.text()
+				dt_ms = (time.perf_counter() - t0) * 1000.0
+				data = json.loads(raw)
+				return data, dt_ms, ''
+	except Exception as Err:
+		dt_ms = (time.perf_counter() - t0) * 1000.0
+		return None, dt_ms, str(Err)
+
+
+@dp.message_handler(
+	lambda m: m.from_user
+	and not m.from_user.is_bot
+	and bool(re.match(
+		r'^[.!/](?:с|c|s)(?:\s+(.+))?$',
+		(m.text or '').strip(),
+		re.IGNORECASE | re.DOTALL
+	)),
+	content_types=types.ContentTypes.TEXT
+)
+async def cmd_cb_signal(message: types.Message):
+	raw_txt = (message.text or '').strip()
+	m_sig = re.match(
+		r'^[.!/](?:с|c|s)(?:\s+(.+))?$',
+		raw_txt,
+		re.IGNORECASE | re.DOTALL
+	)
+	if not m_sig:
+		return
+	
+	sig_body = (m_sig.group(1) or '').strip()
+	if not sig_body:
+		return
+	
+	first_word = sig_body.split()[0].lower()
+	is_ping = first_word in ('пинг', 'пінг', 'ping')
+	
+	rep_uid = 0
+	if message.reply_to_message and message.reply_to_message.from_user:
+		rep_uid = int(message.reply_to_message.from_user.id)
+	
+	data, dt_ms, err = await cb_signal_call({
+		'from_id': int(message.from_user.id),
+		'chat_id': int(message.chat.id),
+		'reply_id': rep_uid,
+		'text': sig_body
+	})
+	
+	if err or not isinstance(data, dict):
+		if is_ping:
+			await message.reply(f'❌ CB API помилка ({dt_ms:.2f} мс): {err}')
+		return
+	
+	if 'error' in data:
+		err_obj = data['error']
+		err_msg = (
+			err_obj.get('error_msg', str(err_obj))
+			if isinstance(err_obj, dict)
+			else str(err_obj)
+		)
+		if is_ping:
+			await message.reply(f'⚠️ CB API ({dt_ms:.2f} мс): {err_msg}')
+		return
+	
+	res = data.get('response')
+	if is_ping:
+		await message.reply(f'🏓 Pong! CB API: <code>{dt_ms:.2f} мс</code>')
+		return
+	
+	if isinstance(res, dict) and str(res.get('reply') or '').strip():
+		await message.reply(str(res['reply']).strip())
 
 @dp.message_handler(commands=['help'])
 async def process_help_command(message: types.Message):
