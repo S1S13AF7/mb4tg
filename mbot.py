@@ -465,7 +465,7 @@ async def track_bind_caller(message: types.Message):
 		'ts': time.time()
 	}
 
-dp.message_handler(
+@dp.message_handler(
 	lambda m: m.chat.type != 'private'
 	and m.from_user
 	and bool(re.match(
