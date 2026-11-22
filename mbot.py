@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import locale
 import os
 import random
 import re
@@ -20,6 +21,13 @@ from aiogram.utils import executor
 from const import REG_OK
 
 ################################################################################
+
+try:
+	loc = (locale.getlocale()[0] or '').split('_')[0].lower()
+	if re.match(r'^[a-z]{2,3}$', loc):
+		sys_lang = loc
+except Exception:
+	pass
 
 CONFIG_PATH = "conf.json"
 uapi_file = "uapi.json"
@@ -168,8 +176,67 @@ my_secret = str(uapi_conf.get('secret', ''))
 
 ################################################################################
 
+def sync_tg_user(
+	user_id: int,
+	reg_int: int,
+	f_name: str,
+	lng_code: str = '',
+	with_secret: bool = False,
+	force_trusted: bool = False
+) -> dict:
+	if not db_pymysql or not con or not d:
+		return {}
+	try:
+		con.ping(reconnect=True)
+		sec_val = gen_uapi_secret(10, 10) if with_secret else ''
+		tr_val = '1' if force_trusted else '0'
+		
+		d.execute(
+			'''INSERT INTO `tg_bot_users`
+			(`user_id`, `reg_int`, `f_name`, `lng_code`, `secret`, `trusted`)
+			VALUES (%s, %s, %s, %s, %s, %s)
+			ON DUPLICATE KEY UPDATE
+				`f_name` = VALUES(`f_name`),
+				`lng_code` = IF(
+					VALUES(`lng_code`) != '',
+					VALUES(`lng_code`),
+					`lng_code`
+				),
+				`trusted` = IF(
+					VALUES(`trusted`) = '1',
+					'1',
+					`trusted`
+				),
+				`secret` = IF(
+					VALUES(`secret`) != '' AND CHAR_LENGTH(`secret`) < 8,
+					VALUES(`secret`),
+					`secret`
+				);''',
+			(
+				int(user_id),
+				int(reg_int),
+				str(f_name),
+				str(lng_code),
+				sec_val,
+				tr_val
+			)
+		)
+		con.commit()
+		
+		d.execute(
+			"SELECT `reg_int`, `lng_code`, `secret`, `trusted` "
+			"FROM `tg_bot_users` WHERE `user_id` = %s LIMIT 1",
+			(int(user_id),)
+		)
+		return d.fetchone() or {}
+	except Exception as Err:
+		print(f"sync_tg_user err: {Err}")
+		return {}
+
+################################################################################
+
 if db_sqlite3:
-	print('підтримку sqlite викинуто')
+	print('🙅 підтримку sqlite викинуто')
 
 ldb = None
 dbc = None
@@ -272,25 +339,14 @@ async def reg_user(message: types.Message) -> int:
 	when_int = int(datetime.timestamp(message.date))
 	reg_date = when_int
 	
-	if db_pymysql and con and d:
-		try:
-			con.ping(reconnect=True)
-			d.execute(
-				"INSERT INTO `tg_bot_users` "
-				"(`user_id`, `reg_int`, `f_name`, `lng_code`) "
-				"VALUES (%s, %s, %s, %s) "
-				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
-				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
-				(user_id, when_int, user_fn, lng_code)
-			)
-			con.commit()
-			d.execute(
-				"SELECT `reg_int` FROM `tg_bot_users` WHERE `user_id` = %s",
-				(user_id,)
-			)
-			rd = d.fetchone()
-			if rd and int(rd['reg_int']) > 0:
-				reg_date = int(rd['reg_int'])
+	row = sync_tg_user(user_id, when_int, user_fn, lng_code)
+	if row and int(row.get('reg_int') or 0) > 0:
+		reg_date = int(row['reg_int'])
+	
+	if reg_date == when_int:
+		print(REG_OK.get(lng_code, REG_OK['default']).format(user_fn=user_fn))
+	
+	return reg_date
 		except Exception as Err:
 			print(f"localhost reg_user err: {Err}")
 	
@@ -316,43 +372,20 @@ async def has_user_lang(user_id: int) -> bool:
 			pass
 	return False
 
-
 async def get_cb_secret(
 	user_id: int,
 	when_int: int,
 	user_fn: str,
 	lng_code: str
 ) -> str:
-	if not db_pymysql or not con or not d:
-		return ''
-	try:
-		con.ping(reconnect=True)
-		new_sec = gen_uapi_secret(10, 10)
-		d.execute(
-			'''INSERT INTO `tg_bot_users`
-			(`user_id`, `reg_int`, `f_name`, `lng_code`, `secret`, `trusted`)
-			VALUES (%s, %s, %s, %s, %s, '0')
-				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
-				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
-				`secret` = IF(
-					CHAR_LENGTH(`secret`) >= 8,
-					`secret`,
-					VALUES(`secret`)
-				);''',
-			(int(user_id), int(when_int), str(user_fn), str(lng_code), new_sec)
-		)
-		con.commit()
-		d.execute(
-			"SELECT `secret` FROM `tg_bot_users` WHERE `user_id` = %s LIMIT 1",
-			(int(user_id),)
-		)
-		row = d.fetchone()
-		if row and row.get('secret'):
-			return str(row['secret'])
+	row = sync_tg_user(
+		user_id, when_int, user_fn, lng_code,
+		with_secret=True
+	)
+	return str(row.get('secret') or '')
 	except Exception as Err:
 		print(f"localhost get_cb_secret err: {Err}")
 	return ''
-
 
 @dp.message_handler(commands=['start', 'reg', 'cb', 'cb4ub', 'cb4tg'])
 async def cmd_user_entry(message: types.Message):
