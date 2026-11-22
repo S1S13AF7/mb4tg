@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 
+import asyncio
 import json
 import os
 import random
 import re
 import sqlite3
 import string
+import subprocess
 import sys
 import time
+
 from datetime import datetime, timedelta
 
 from aiogram import Bot, types
@@ -16,7 +19,7 @@ from aiogram.utils import executor
 
 from const import REG_OK
 
-########################################################################
+################################################################################
 
 CONFIG_PATH = "conf.json"
 uapi_file = "uapi.json"
@@ -63,7 +66,8 @@ if os.path.exists("config.py"):
 		except Exception:
 			pass
 		os.remove("config.py")
-		print(f'♻️ Токен перенесено зі старого config.py у {CONFIG_PATH}, файл видалено.')
+		print(f'♻️ Токен перенесено зі старого config.py у {CONFIG_PATH}, 
+		файл видалено.')
 	except Exception as e:
 		print(f'⚠️ Не вдалося імпортувати config.py: {e}')
 
@@ -105,7 +109,7 @@ mysql_conf = config.get('mysql') if isinstance(config.get('mysql'), dict) else {
 config['mysql'] = mysql_conf
 save_config()
 
-########################################################################
+################################################################################
 
 
 def gen_uapi_secret(min_len: int = 10, max_len: int = 15) -> str:
@@ -154,18 +158,10 @@ def save_uapi_conf(data: dict, full_path: str = None):
 uapi_conf = load_uapi_conf()
 my_secret = str(uapi_conf.get('secret', ''))
 
-########################################################################
+################################################################################
 
 if db_sqlite3:
-	con = sqlite3.connect("db4tg.sqlite")
-	cur = con.cursor()
-	cur.execute('''CREATE TABLE IF NOT EXISTS users (
-		user_id		INTEGER NOT NULL DEFAULT 0 UNIQUE,
-		reg_int		INTEGER NOT NULL DEFAULT 0,
-		f_name		VARCHAR NOT NULL DEFAULT '',
-		lng_code	VARCHAR NOT NULL DEFAULT ''
-	);''')
-	con.commit()
+	print('підтримку sqlite викинуто')
 
 ldb = None
 dbc = None
@@ -207,7 +203,7 @@ if db_pymysql:
 	);''')
 	con.commit()
 
-########################################################################
+################################################################################
 
 bot = Bot(token=TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot)
@@ -256,7 +252,7 @@ async def on_startup(dispatcher: Dispatcher):
 		except Exception as e:
 			print(f'⚠️ Помилка самореєстрації бота в MySQL: {e}')
 
-########################################################################
+################################################################################
 
 
 async def reg_user(message: types.Message) -> int:
@@ -469,6 +465,52 @@ async def cmd_chats(message: types.Message):
 •	🐸 @misc_games
 •	🗃 @misc_files_v2
 ''')
+
+################################################################################
+
+async def auto_pull():
+	repo_dir = os.path.dirname(os.path.abspath(__file__))
+	if not os.path.isdir(os.path.join(repo_dir, '.git')):
+		return
+	
+	await asyncio.sleep(random.uniform(60, 180))
+	err_notified = False
+	loop = asyncio.get_running_loop()
+	
+	while True:
+		try:
+			proc = await loop.run_in_executor(
+				None,
+				lambda: subprocess.run(
+					['git', 'pull'],
+					cwd=repo_dir,
+					capture_output=True,
+					text=True,
+					timeout=30
+				)
+			)
+			out_s = (proc.stdout or '').strip()
+			err_s = (proc.stderr or '').strip()
+			msg = out_s or err_s
+			
+			if proc.returncode != 0:
+				if not err_notified:
+					err_notified = True
+					print(f'⚠️ [auto_pull] Помилка git pull:\n{msg[:300]}')
+			else:
+				err_notified = False
+				if (
+					msg
+					and 'Already up to date' not in msg
+					and 'Уже актуально' not in msg
+				):
+					print(f'📥 [auto_pull] Оновлено:\n{msg[:300]}')
+		except Exception as e:
+			print(f'⚠️ [auto_pull] Виняток: {e}')
+		
+		await asyncio.sleep(random.uniform(1800, 2700))
+
+	asyncio.create_task(auto_pull())
 
 if __name__ == '__main__':
 	executor.start_polling(dp, on_startup=on_startup)
