@@ -492,13 +492,21 @@ async def track_bind_caller(message: types.Message):
 		
 		if affected > 0:
 			lang_code = ''
-			if message.reply_to_message and message.reply_to_message.from_user:
+			caller_id = 0
+			c_info = last_bind_caller.pop(int(message.chat.id), None)
+			if c_info and (time.time() - c_info['ts']) < 30:
+				caller_id = int(c_info['user_id'])
+				lang_code = str(c_info['lang'])
+			elif message.reply_to_message and message.reply_to_message.from_user:
 				caller = message.reply_to_message.from_user
+				caller_id = int(caller.id)
 				lang_code = str(caller.language_code or '').strip().lower()
+			
+			if caller_id > 0:
 				d.execute(
 					"SELECT `lng_code` FROM `tg_bot_users` "
 					"WHERE `user_id` = %s LIMIT 1",
-					(int(caller.id),)
+					(caller_id,)
 				)
 				u_row = d.fetchone()
 				if u_row and str(u_row.get('lng_code') or '').strip():
