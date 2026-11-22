@@ -18,7 +18,7 @@ from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
 
-from const import REG_OK
+from const import BIND_OK, DB_NAME, IRISES, REG_OK
 
 ################################################################################
 sys_lang = ''
@@ -422,6 +422,75 @@ async def cmd_user_entry(message: types.Message):
 		snd_msg = "🖖"
 	
 	await message.answer(snd_msg)
+
+@dp.message_handler(
+	lambda m: m.chat.type != 'private'
+	and m.from_user
+	and int(m.from_user.id) in IRISES
+	and bool(re.search(
+		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
+		m.text or m.caption or '',
+		re.IGNORECASE
+	)),
+	content_types=types.ContentTypes.TEXT
+)
+async def iris_bind_chat_bot(message: types.Message):
+	raw_txt = message.text or message.caption or ''
+	code_m = re.search(
+		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
+		raw_txt,
+		re.IGNORECASE
+	)
+	if not code_m or not db_pymysql or not con or not d:
+		return
+	
+	code = code_m.group(1).lower()
+	chat_abs = abs(int(message.chat.id))
+	chat_title = str(message.chat.title or '').strip()
+	msg_ts = int(datetime.timestamp(message.date))
+	me = await bot.get_me()
+	bot_id = int(me.id)
+	
+	print(f'🔗 [mbot bind] {bot_id} -> {code} : -{chat_abs} ({chat_title})')
+	
+	try:
+		con.ping(reconnect=True)
+		d.execute(
+			'''INSERT INTO `userbot_bind`
+			(`platform`, `id_user`, `code`, `date`, `id_chat`, `title`)
+			VALUES ('tg', %s, %s, %s, %s, %s)
+			ON DUPLICATE KEY UPDATE
+				`date` = VALUES(`date`),
+				`id_chat` = VALUES(`id_chat`),
+				`title` = IF(
+					VALUES(`title`) != '',
+					VALUES(`title`),
+					`title`
+				);''',
+			(bot_id, code, msg_ts, chat_abs, chat_title)
+		)
+		affected = int(d.rowcount or 0)
+		con.commit()
+		
+		if affected > 0:
+			lang_code = ''
+			if message.reply_to_message and message.reply_to_message.from_user:
+				caller = message.reply_to_message.from_user
+				lang_code = str(caller.language_code or '').strip().lower()
+				d.execute(
+					"SELECT `lng_code` FROM `tg_bot_users` "
+					"WHERE `user_id` = %s LIMIT 1",
+					(int(caller.id),)
+				)
+				u_row = d.fetchone()
+				if u_row and str(u_row.get('lng_code') or '').strip():
+					lang_code = str(u_row['lng_code']).strip().lower()
+			
+			short_lang = lang_code[:2] if lang_code else 'default'
+			reply_txt = BIND_OK.get(short_lang, BIND_OK['default'])
+			await message.answer(reply_txt)
+	except Exception as Err:
+		print(f'⚠️ [mbot bind] MySQL err: {Err}')
 
 @dp.message_handler(commands=['help'])
 async def process_help_command(message: types.Message):
