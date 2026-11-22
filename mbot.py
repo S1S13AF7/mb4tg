@@ -473,38 +473,12 @@ async def track_bind_caller(message: types.Message):
 	content_types=types.ContentTypes.TEXT
 )
 async def iris_bind_chat_bot(message: types.Message):
-		if affected > 0:
-			lang_code = ''
-			caller_id = 0
-			c_info = last_bind_caller.pop(int(message.chat.id), None)
-			if c_info and (time.time() - c_info['ts']) < 30:
-				caller_id = int(c_info['user_id'])
-				lang_code = str(c_info['lang'])
-			elif message.reply_to_message and message.reply_to_message.from_user:
-				caller = message.reply_to_message.from_user
-				caller_id = int(caller.id)
-				lang_code = str(caller.language_code or '').strip().lower()
-			
-			if caller_id > 0:
-				d.execute(
-					"SELECT `lng_code` FROM `tg_bot_users` "
-					"WHERE `user_id` = %s LIMIT 1",
-					(caller_id,)
-				)
-				u_row = d.fetchone()
-				if u_row and str(u_row.get('lng_code') or '').strip():
-					lang_code = str(u_row['lng_code']).strip().lower()
-			
-			short_lang = lang_code[:2] if lang_code else 'default'
-			reply_txt = BIND_OK.get(short_lang, BIND_OK['default'])
-			await message.answer(reply_txt)
-
-async def track_bind_caller(message: types.Message):
-	last_bind_caller[int(message.chat.id)] = {
-		'user_id': int(message.from_user.id),
-		'lang': str(message.from_user.language_code or '').strip().lower(),
-		'ts': time.time()
-	}
+	raw_txt = message.text or message.caption or ''
+	code_m = re.search(
+		r'🗓\s*Код\s+(?:беседы|чата|чату)\s*:\s*([0-9a-f]{8})',
+		raw_txt,
+		re.IGNORECASE
+	)
 	if not code_m or not db_pymysql or not con or not d:
 		return
 	
