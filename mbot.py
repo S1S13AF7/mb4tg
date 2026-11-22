@@ -656,7 +656,7 @@ async def cmd_dice(message: types.Message):
 @dp.message_handler(commands=['code','код'])
 async def cmd_code(message: types.Message):
 	text='''
-<code>https://github.com/S1S13AF7/cb4tg</code> – CallBack для ботів у телеграмі
+<code>https://github.com/S1S13AF7/cb4tg</code> – CallBack для ботів у tg
 <code>https://github.com/S1S13AF7/mb4tg</code> – код бота @misc_beta_bot
 <code>https://github.com/S1S13AF7/ub4tg</code> – юб. 
 	'''
