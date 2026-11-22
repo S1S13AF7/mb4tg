@@ -289,7 +289,7 @@ async def on_startup(dispatcher: Dispatcher):
 	bot_id = int(me.id)
 	bot_name = str(me.first_name or '')
 	title_str = f'@{me.username} [{bot_id}]'
-	print(f'Bot started: {title_str})')
+	print(f'🤖 Bot started: {title_str}')
 	
 	if os.name == 'nt':
 		try:
