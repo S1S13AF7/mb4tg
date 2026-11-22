@@ -231,8 +231,8 @@ async def on_startup(dispatcher: Dispatcher):
 				'''INSERT INTO `tg_bot_users`
 				(`user_id`, `reg_int`, `f_name`, `secret`, `trusted`)
 				VALUES (%s, %s, %s, %s, '1')
-				ON DUPLICATE KEY UPDATE
-					`f_name` = VALUES(`f_name`),
+				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
+				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
 					`trusted` = '1',
 					`secret` = IF(
 						CHAR_LENGTH(`secret`) >= 8,
@@ -279,8 +279,8 @@ async def reg_user(message: types.Message) -> int:
 				"INSERT INTO `tg_bot_users` "
 				"(`user_id`, `reg_int`, `f_name`, `lng_code`) "
 				"VALUES (%s, %s, %s, %s) "
-				"ON DUPLICATE KEY UPDATE "
-				"`f_name` = VALUES(`f_name`), `lng_code` = VALUES(`lng_code`);",
+				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
+				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
 				(user_id, when_int, user_fn, lng_code)
 			)
 			con.commit()
@@ -332,9 +332,8 @@ async def get_cb_secret(
 			'''INSERT INTO `tg_bot_users`
 			(`user_id`, `reg_int`, `f_name`, `lng_code`, `secret`, `trusted`)
 			VALUES (%s, %s, %s, %s, %s, '0')
-			ON DUPLICATE KEY UPDATE
-				`f_name` = VALUES(`f_name`),
-				`lng_code` = VALUES(`lng_code`),
+				"ON DUPLICATE KEY UPDATE `f_name` = VALUES(`f_name`), "
+				"`lng_code` = IF(VALUES(`lng_code`) != '', VALUES(`lng_code`), `lng_code`);",
 				`secret` = IF(
 					CHAR_LENGTH(`secret`) >= 8,
 					`secret`,
