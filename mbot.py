@@ -288,7 +288,17 @@ async def on_startup(dispatcher: Dispatcher):
 	me = await bot.get_me()
 	bot_id = int(me.id)
 	bot_name = str(me.first_name or '')
-	print(f'Bot started: @{me.username} ({bot_id})')
+	title_str = f'@{me.username} [{bot_id}]'
+	print(f'Bot started: {title_str})')
+	
+	if os.name == 'nt':
+		try:
+			import ctypes
+			ctypes.windll.kernel32.SetConsoleTitleW(title_str)
+		except Exception:
+			pass
+	elif os.name == 'posix':
+		print(f'\33]0;{title_str}\a', end='', flush=True)
 	
 	row = sync_tg_user(
 		bot_id, int(time.time()), bot_name, sys_lang,
