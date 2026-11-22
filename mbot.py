@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import hashlib
 import json
 import locale
 import os
 import random
 import re
+import socket
 import sqlite3
 import string
 import subprocess
 import sys
 import time
-
 from datetime import datetime, timedelta
 
 from aiogram import Bot, types
@@ -19,6 +20,21 @@ from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
 
 from const import BIND_OK, DB_NAME, IRISES, REG_OK
+
+################################################################################
+
+_lock_dir = os.path.dirname(os.path.abspath(__file__)).lower()
+_lock_port = 20000 + (
+	int(hashlib.md5(_lock_dir.encode('utf-8')).hexdigest()[:8], 16)
+	% 40000
+)
+_instance_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+	_instance_sock.bind(('127.0.0.1', _lock_port))
+except OSError:
+	print(f'⚠️ Копія з {_lock_dir} вже запущена! Вихід...')
+	time.sleep(2)
+	sys.exit(0)
 
 ################################################################################
 sys_lang = ''
