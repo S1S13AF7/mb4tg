@@ -3,4 +3,4 @@
 aiogram==2.25.2
 #asyncio
 pymysql
-emoji
+#emoji
