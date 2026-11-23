@@ -212,7 +212,7 @@ def sync_tg_user(
 	try:
 		con.ping(reconnect=True)
 		sec_val = gen_secret(10) if with_secret else ''
-		tr_val = '1'
+		tr_val = '1' if force_trusted else '0'
 		
 		d.execute(
 			'''INSERT INTO `tg_bot_users`
